@@ -671,53 +671,55 @@ def render_duration_chart(messages: list[dict]):
     
     return fig
 
-# ── 點擊跳出全新空白分頁的圖表按鈕 (JS + 強制對齊版) ──────────────────────────
+# ── 點擊跳出全新空白分頁的圖表按鈕 (強制像素級對齊版) ──────────────────────────
 def render_chart_button(fig):
     """產生一個按鈕，點擊後會透過 JS 在全新的瀏覽器分頁中繪製全螢幕的 Plotly 圖表"""
     html_content = fig.to_html(full_html=True, include_plotlyjs='cdn')
     b64_html = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
     
-    # 強制將 html, body, button 邊距清零，並精準設定高度以解決框中框與位移問題
     button_html = f"""
     <!DOCTYPE html>
     <html>
     <head>
     <style>
+        * {{
+            box-sizing: border-box !important;
+        }}
         html, body {{
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: transparent;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            overflow: hidden !important;
+            background-color: transparent !important;
         }}
         button {{
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-            width: 100%;
-            height: 100%; /* 撐滿整個 iframe 的高度 (40px) */
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 400;
-            padding: 0;
-            border-radius: 0.5rem;
-            margin: 0;
-            line-height: 1.6;
-            color: #31333F;
-            background-color: #ffffff;
-            border: 1px solid rgba(49, 51, 63, 0.2);
-            cursor: pointer;
-            font-size: 15px;
-            font-family: 'Source Sans Pro', sans-serif;
-            box-sizing: border-box;
-            transition: border-color 0.2s, color 0.2s;
-            outline: none;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: 1px solid rgba(49, 51, 63, 0.2) !important;
+            border-radius: 0.5rem !important;
+            background-color: #ffffff !important;
+            color: #31333F !important;
+            font-size: 15px !important;
+            font-family: "Source Sans Pro", "Segoe UI", "Roboto", sans-serif !important;
+            font-weight: 400 !important;
+            cursor: pointer !important;
+            transition: border-color 0.2s, color 0.2s !important;
+            outline: none !important;
         }}
         button:hover {{
-            border-color: #FF4B4B;
-            color: #FF4B4B;
+            border-color: #FF4B4B !important;
+            color: #FF4B4B !important;
         }}
     </style>
     </head>
@@ -734,15 +736,17 @@ def render_chart_button(fig):
             const decodedHTML = new TextDecoder('utf-8').decode(bytes);
             
             const newWindow = window.open('', '_blank');
-            newWindow.document.write(decodedHTML);
-            newWindow.document.close();
+            if(newWindow) {{
+                newWindow.document.write(decodedHTML);
+                newWindow.document.close();
+            }}
         }}
         </script>
     </body>
     </html>
     """
-    # 40px 是 Streamlit 原生 st.download_button 的標準高度，這樣可以完美對齊
-    components.html(button_html, height=40, scrolling=False)
+    # 42px 完美貼合 Streamlit 原生下載按鈕的高度，結合 CSS 的絕對定位徹底消除框中框
+    components.html(button_html, height=42, scrolling=False)
 
 
 def render_messages_html(messages: list[dict]) -> str:

@@ -909,9 +909,9 @@ def main():
         st.markdown("""
             <div style="font-size: 0.9em; line-height: 1.6; color: #555;">
                 <b>👨‍💻 Author:</b> Yen-Hung, Chen<br>
-                <b>🐙 GitHub:</b> <a href="[https://github.com/pplongChen](https://github.com/pplongChen)" target="_blank" style="color: #2563eb; text-decoration: none;">[https://github.com/pplongChen](https://github.com/pplongChen)</a><br>
-                <b>📁 Repository:</b> <a href="[https://github.com/pplongChen/agent_tools](https://github.com/pplongChen/agent_tools)" target="_blank" style="color: #2563eb; text-decoration: none;">[https://github.com/pplongChen/agent_tools](https://github.com/pplongChen/agent_tools)</a><br>
-                <b>🌐 Website:</b> <a href="[https://network-affairs.github.io/](https://network-affairs.github.io/)" target="_blank" style="color: #2563eb; text-decoration: none;">[https://network-affairs.github.io/](https://network-affairs.github.io/)</a>
+                <b>🐙 GitHub:</b> https://github.com/pplongChen<br>
+                <b>📁 Repository:</b> https://github.com/pplongChen/agent_tools<br>
+                <b>🌐 Website:</b> https://network-affairs.github.io/
             </div>
         """, unsafe_allow_html=True)
         

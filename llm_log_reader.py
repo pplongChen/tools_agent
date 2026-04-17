@@ -2,6 +2,7 @@ import re
 import html as html_lib
 import difflib
 import uuid
+import base64
 from datetime import datetime
 import streamlit as st
 import streamlit.components.v1 as components
@@ -582,7 +583,7 @@ def generate_user_prompts_export(messages: list[dict]) -> str:
             
     return out.strip() + "\n"
 
-# ── 繪製時間折線圖 (以提問為主軸) ─────────────────────────────────
+# ── 繪製時間折線圖 ─────────────────────────────────────────
 def render_duration_chart(messages: list[dict]):
     """若存在回答秒數，就透過 plotly 產生折線圖並返回 figure 物件"""
     chart_data = []
@@ -595,13 +596,12 @@ def render_duration_chart(messages: list[dict]):
     
     for msg in messages:
         if msg['role'] == 'user':
-            # 保存上一個問題的資料 (若有的話)
             if q_count > 0:
                 cumulative_duration += current_q_duration
                 chart_data.append({
-                    "Question_Turn": q_count, # X軸: 第幾次問題
-                    "Cumulative_Duration": round(cumulative_duration, 2), # Y軸: 累計秒數
-                    "AI_Answer_Count": str(current_q_ai_count), # 標記文字: AI回答幾次
+                    "Question_Turn": q_count, 
+                    "Cumulative_Duration": round(cumulative_duration, 2), 
+                    "AI_Answer_Count": str(current_q_ai_count), 
                     "Duration": round(current_q_duration, 2),
                     "Prompt": current_q_prompt
                 })
@@ -611,7 +611,6 @@ def render_duration_chart(messages: list[dict]):
             if len(msg['content'].strip()) > 40:
                 current_q_prompt += "..."
                 
-            # 重置目前回合的統計
             current_q_ai_count = 0
             current_q_duration = 0.0
             
@@ -621,7 +620,6 @@ def render_duration_chart(messages: list[dict]):
                 current_q_ai_count += 1
                 current_q_duration += d
                 
-    # 處理最後一筆資料
     if q_count > 0:
         cumulative_duration += current_q_duration
         chart_data.append({
@@ -668,10 +666,61 @@ def render_duration_chart(messages: list[dict]):
         template="plotly_white",
         hovermode="x unified",
         margin=dict(l=40, r=40, t=60, b=40),
-        height=450
+        height=550 # 提供更充裕的全螢幕繪圖高度
     )
     
     return fig
+
+# ── 點擊跳出全新空白分頁的圖表按鈕 (JS) ──────────────────────────
+def render_chart_button(fig):
+    """產生一個按鈕，點擊後會透過 JS 在全新的瀏覽器分頁中繪製全螢幕的 Plotly 圖表"""
+    html_content = fig.to_html(full_html=True, include_plotlyjs='cdn')
+    b64_html = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
+    
+    button_html = f"""
+    <div style="margin: 0; padding: 0;">
+        <button onclick="openChart()" style="
+            width: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 400;
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.5rem;
+            min-height: 2.5rem;
+            margin: 0px;
+            line-height: 1.6;
+            color: #31333F;
+            background-color: #ffffff;
+            border: 1px solid rgba(49, 51, 63, 0.2);
+            cursor: pointer;
+            font-size: 15px;
+            font-family: 'Source Sans Pro', sans-serif;
+            box-sizing: border-box;
+            transition: border-color 0.2s, color 0.2s;
+        " onmouseover="this.style.borderColor='#FF4B4B'; this.style.color='#FF4B4B';" 
+           onmouseout="this.style.borderColor='rgba(49, 51, 63, 0.2)'; this.style.color='#31333F';">
+            📊 Show Chart
+        </button>
+    </div>
+    <script>
+    function openChart() {{
+        const b64Data = '{b64_html}';
+        const binaryStr = window.atob(b64Data);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {{
+            bytes[i] = binaryStr.charCodeAt(i);
+        }}
+        const decodedHTML = new TextDecoder('utf-8').decode(bytes);
+        
+        const newWindow = window.open('', '_blank');
+        newWindow.document.write(decodedHTML);
+        newWindow.document.close();
+    }}
+    </script>
+    """
+    # 這裡的 height=45 剛好容納一個按鈕的標準高度，不會有卷軸
+    components.html(button_html, height=45, scrolling=False)
 
 
 def render_messages_html(messages: list[dict]) -> str:
@@ -737,12 +786,6 @@ def render_messages_html(messages: list[dict]) -> str:
             parts.append(ai_html)
             
     return '\n'.join(parts)
-
-
-# ── 新增：利用 st.dialog 建立彈出視窗 ───────────────────────────
-@st.dialog("📊 AI 統計圖表 (Statistics Chart)", width="large")
-def show_chart_dialog(fig):
-    st.plotly_chart(fig, use_container_width=True)
 
 
 # ── Streamlit 介面 ────────────────────────────────────────────────────────────
@@ -870,26 +913,16 @@ def main():
             else:
                 st.success("Parsed successfully!")
                 
-            # ── 這裡改為兩排，每排兩個按鈕 ──────────────────────
-            # 第一排
-            row1_col1, row1_col2 = st.columns(2)
-            with row1_col1: 
+            # ── 調整：利用直向堆疊來自動緊密貼合按鈕，消除多餘的行距 ────────────────
+            col_b1, col_b2 = st.columns(2)
+            with col_b1: 
                 st.download_button("📥 Export HTML", data=st.session_state.parsed_result["html"], file_name=f"{st.session_state.parsed_result['export_name']}.html", mime="text/html", use_container_width=True)
-            with row1_col2: 
-                st.download_button("📥 Export MD", data=st.session_state.parsed_result["md"], file_name=f"{st.session_state.parsed_result['export_name']}_export.md", mime="text/markdown", use_container_width=True)
-            
-            # 給兩排之間加一點小間距 (可選)
-            st.markdown("<div style='height: 5px;'></div>", unsafe_allow_html=True)
-
-            # 第二排
-            row2_col1, row2_col2 = st.columns(2)
-            with row2_col1: 
                 st.download_button("📥 Export Prompts", data=st.session_state.parsed_result["user_prompts_md"], file_name=f"{st.session_state.parsed_result['export_name']}_prompts.md", mime="text/markdown", use_container_width=True)
-            with row2_col2:
+            with col_b2: 
+                st.download_button("📥 Export MD", data=st.session_state.parsed_result["md"], file_name=f"{st.session_state.parsed_result['export_name']}_export.md", mime="text/markdown", use_container_width=True)
                 # 若有成功解析到時間數據，才啟用跳出視窗按鈕
                 if st.session_state.parsed_result.get("duration_fig"):
-                    if st.button("📊 Show Chart", use_container_width=True):
-                        show_chart_dialog(st.session_state.parsed_result["duration_fig"])
+                    render_chart_button(st.session_state.parsed_result["duration_fig"])
                 else:
                     st.button("📊 No Chart Data", disabled=True, use_container_width=True)
             
@@ -908,7 +941,7 @@ def main():
         
     with col_v:
         if st.session_state.parsed_result:
-            # 圖表已移至跳出視窗顯示，預覽區專注渲染對話 HTML
+            # 圖表已移至自訂按鈕來跳出新分頁顯示，這邊預覽區專注渲染對話 HTML
             if st.session_state.parsed_result.get("html"):
                 components.html(st.session_state.parsed_result["html"], height=650, scrolling=True)
         else: 

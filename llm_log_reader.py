@@ -666,29 +666,44 @@ def render_duration_chart(messages: list[dict]):
         template="plotly_white",
         hovermode="x unified",
         margin=dict(l=40, r=40, t=60, b=40),
-        height=550 # 提供更充裕的全螢幕繪圖高度
+        height=550
     )
     
     return fig
 
-# ── 點擊跳出全新空白分頁的圖表按鈕 (JS) ──────────────────────────
+# ── 點擊跳出全新空白分頁的圖表按鈕 (JS + 強制對齊版) ──────────────────────────
 def render_chart_button(fig):
     """產生一個按鈕，點擊後會透過 JS 在全新的瀏覽器分頁中繪製全螢幕的 Plotly 圖表"""
     html_content = fig.to_html(full_html=True, include_plotlyjs='cdn')
     b64_html = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
     
+    # 強制將 html, body, button 邊距清零，並精準設定高度以解決框中框與位移問題
     button_html = f"""
-    <div style="margin: 0; padding: 0;">
-        <button onclick="openChart()" style="
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+        html, body {{
+            margin: 0;
+            padding: 0;
             width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: transparent;
+        }}
+        button {{
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 100%; /* 撐滿整個 iframe 的高度 (40px) */
             display: inline-flex;
             align-items: center;
             justify-content: center;
             font-weight: 400;
-            padding: 0.25rem 0.75rem;
+            padding: 0;
             border-radius: 0.5rem;
-            min-height: 2.5rem;
-            margin: 0px;
+            margin: 0;
             line-height: 1.6;
             color: #31333F;
             background-color: #ffffff;
@@ -698,29 +713,36 @@ def render_chart_button(fig):
             font-family: 'Source Sans Pro', sans-serif;
             box-sizing: border-box;
             transition: border-color 0.2s, color 0.2s;
-        " onmouseover="this.style.borderColor='#FF4B4B'; this.style.color='#FF4B4B';" 
-           onmouseout="this.style.borderColor='rgba(49, 51, 63, 0.2)'; this.style.color='#31333F';">
-            📊 Show Chart
-        </button>
-    </div>
-    <script>
-    function openChart() {{
-        const b64Data = '{b64_html}';
-        const binaryStr = window.atob(b64Data);
-        const bytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) {{
-            bytes[i] = binaryStr.charCodeAt(i);
+            outline: none;
         }}
-        const decodedHTML = new TextDecoder('utf-8').decode(bytes);
-        
-        const newWindow = window.open('', '_blank');
-        newWindow.document.write(decodedHTML);
-        newWindow.document.close();
-    }}
-    </script>
+        button:hover {{
+            border-color: #FF4B4B;
+            color: #FF4B4B;
+        }}
+    </style>
+    </head>
+    <body>
+        <button onclick="openChart()">📊 Show Chart</button>
+        <script>
+        function openChart() {{
+            const b64Data = '{b64_html}';
+            const binaryStr = window.atob(b64Data);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {{
+                bytes[i] = binaryStr.charCodeAt(i);
+            }}
+            const decodedHTML = new TextDecoder('utf-8').decode(bytes);
+            
+            const newWindow = window.open('', '_blank');
+            newWindow.document.write(decodedHTML);
+            newWindow.document.close();
+        }}
+        </script>
+    </body>
+    </html>
     """
-    # 這裡的 height=45 剛好容納一個按鈕的標準高度，不會有卷軸
-    components.html(button_html, height=45, scrolling=False)
+    # 40px 是 Streamlit 原生 st.download_button 的標準高度，這樣可以完美對齊
+    components.html(button_html, height=40, scrolling=False)
 
 
 def render_messages_html(messages: list[dict]) -> str:
@@ -913,14 +935,16 @@ def main():
             else:
                 st.success("Parsed successfully!")
                 
-            # ── 調整：利用直向堆疊來自動緊密貼合按鈕，消除多餘的行距 ────────────────
+            # ── 透過兩個欄位直式堆疊，解決排距與高度跑版問題 ────────────────
             col_b1, col_b2 = st.columns(2)
+            
             with col_b1: 
                 st.download_button("📥 Export HTML", data=st.session_state.parsed_result["html"], file_name=f"{st.session_state.parsed_result['export_name']}.html", mime="text/html", use_container_width=True)
                 st.download_button("📥 Export Prompts", data=st.session_state.parsed_result["user_prompts_md"], file_name=f"{st.session_state.parsed_result['export_name']}_prompts.md", mime="text/markdown", use_container_width=True)
+                
             with col_b2: 
                 st.download_button("📥 Export MD", data=st.session_state.parsed_result["md"], file_name=f"{st.session_state.parsed_result['export_name']}_export.md", mime="text/markdown", use_container_width=True)
-                # 若有成功解析到時間數據，才啟用跳出視窗按鈕
+                # 若有成功解析到時間數據，才顯示客製化 JS 跳窗按鈕
                 if st.session_state.parsed_result.get("duration_fig"):
                     render_chart_button(st.session_state.parsed_result["duration_fig"])
                 else:
@@ -941,7 +965,6 @@ def main():
         
     with col_v:
         if st.session_state.parsed_result:
-            # 圖表已移至自訂按鈕來跳出新分頁顯示，這邊預覽區專注渲染對話 HTML
             if st.session_state.parsed_result.get("html"):
                 components.html(st.session_state.parsed_result["html"], height=650, scrolling=True)
         else: 

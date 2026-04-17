@@ -870,15 +870,22 @@ def main():
             else:
                 st.success("Parsed successfully!")
                 
-            # ── 將按鈕區改為 4 欄，加入跳出圖表的按鈕 ──────────────────────
-            b1, b2, b3, b4 = st.columns(4)
-            with b1: 
+            # ── 這裡改為兩排，每排兩個按鈕 ──────────────────────
+            # 第一排
+            row1_col1, row1_col2 = st.columns(2)
+            with row1_col1: 
                 st.download_button("📥 Export HTML", data=st.session_state.parsed_result["html"], file_name=f"{st.session_state.parsed_result['export_name']}.html", mime="text/html", use_container_width=True)
-            with b2: 
+            with row1_col2: 
                 st.download_button("📥 Export MD", data=st.session_state.parsed_result["md"], file_name=f"{st.session_state.parsed_result['export_name']}_export.md", mime="text/markdown", use_container_width=True)
-            with b3: 
+            
+            # 給兩排之間加一點小間距 (可選)
+            st.markdown("<div style='height: 5px;'></div>", unsafe_allow_html=True)
+
+            # 第二排
+            row2_col1, row2_col2 = st.columns(2)
+            with row2_col1: 
                 st.download_button("📥 Export Prompts", data=st.session_state.parsed_result["user_prompts_md"], file_name=f"{st.session_state.parsed_result['export_name']}_prompts.md", mime="text/markdown", use_container_width=True)
-            with b4:
+            with row2_col2:
                 # 若有成功解析到時間數據，才啟用跳出視窗按鈕
                 if st.session_state.parsed_result.get("duration_fig"):
                     if st.button("📊 Show Chart", use_container_width=True):

@@ -7,7 +7,8 @@ from datetime import datetime
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
-import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # ── 檔案標頭清理與合併邏輯 ──────────────────────────────────────────
 
@@ -571,7 +572,7 @@ def generate_markdown_export(header: str, messages: list[dict]) -> str:
         
     return out.strip() + "\n"
 
-# ── 匯出自己的發問 ──────────────────────────────────────────
+
 def generate_user_prompts_export(messages: list[dict]) -> str:
     out = ""
     q_count = 1
@@ -583,9 +584,9 @@ def generate_user_prompts_export(messages: list[dict]) -> str:
             
     return out.strip() + "\n"
 
-# ── 繪製時間折線圖 ─────────────────────────────────────────
+# ── 繪製時間折線圖與長條圖 (包含雙 Y 軸設計) ─────────────────────────────────
 def render_duration_chart(messages: list[dict]):
-    """若存在回答秒數，就透過 plotly 產生折線圖並返回 figure 物件"""
+    """產生統計圖表：總時間(折線)、平均時間(折線)、回答次數(長條)"""
     chart_data = []
     q_count = 0
     cumulative_duration = 0.0
@@ -598,11 +599,13 @@ def render_duration_chart(messages: list[dict]):
         if msg['role'] == 'user':
             if q_count > 0:
                 cumulative_duration += current_q_duration
+                avg_dur = current_q_duration / current_q_ai_count if current_q_ai_count > 0 else 0.0
                 chart_data.append({
                     "Question_Turn": q_count, 
                     "Cumulative_Duration": round(cumulative_duration, 2), 
-                    "AI_Answer_Count": str(current_q_ai_count), 
-                    "Duration": round(current_q_duration, 2),
+                    "AI_Answer_Count": current_q_ai_count, 
+                    "Total_Duration": round(current_q_duration, 2),
+                    "Average_Duration": round(avg_dur, 2),
                     "Prompt": current_q_prompt
                 })
                 
@@ -622,52 +625,89 @@ def render_duration_chart(messages: list[dict]):
                 
     if q_count > 0:
         cumulative_duration += current_q_duration
+        avg_dur = current_q_duration / current_q_ai_count if current_q_ai_count > 0 else 0.0
         chart_data.append({
             "Question_Turn": q_count,
             "Cumulative_Duration": round(cumulative_duration, 2),
-            "AI_Answer_Count": str(current_q_ai_count),
-            "Duration": round(current_q_duration, 2),
+            "AI_Answer_Count": current_q_ai_count,
+            "Total_Duration": round(current_q_duration, 2),
+            "Average_Duration": round(avg_dur, 2),
             "Prompt": current_q_prompt
         })
                 
-    if not chart_data or all(d["AI_Answer_Count"] == "0" for d in chart_data):
+    if not chart_data or all(d["AI_Answer_Count"] == 0 for d in chart_data):
         return None
         
     df = pd.DataFrame(chart_data)
     
-    fig = px.line(
-        df,
-        x="Question_Turn",
-        y="Cumulative_Duration",
-        markers=True,
-        text="AI_Answer_Count",
-        custom_data=["Prompt", "Duration"]
+    # 建立雙 Y 軸的圖表架構
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    
+    # 1. 每次問題的回答次數 (長條圖) - 對應右邊 Y 軸
+    fig.add_trace(
+        go.Bar(
+            x=df["Question_Turn"],
+            y=df["AI_Answer_Count"],
+            name="回答次數 (Count)",
+            marker_color="rgba(167, 139, 250, 0.4)", # 淺紫色半透明
+            hovertemplate="回答次數: <b>%{y} 次</b><extra></extra>"
+        ),
+        secondary_y=True,
     )
     
-    fig.update_traces(
-        textposition="top center",
-        textfont=dict(color="#2563eb", size=13, family="JetBrains Mono"),
-        marker=dict(size=10, color="#7c3aed", line=dict(width=2, color="white")),
-        line=dict(width=3, color="#a5b4fc"),
-        hovertemplate=(
-            "<b>第 %{x} 次問題</b><br>"
-            "累計耗時: <b>%{y}s</b><br>"
-            "本回合耗時: %{customdata[1]}s<br>"
-            "本回合 AI 回答數: <b>%{text} 次</b><br>"
-            "發問預覽: %{customdata[0]}<extra></extra>"
-        )
+    # 2. 每次問題的總回答時間 (折線圖) - 對應左邊 Y 軸
+    fig.add_trace(
+        go.Scatter(
+            x=df["Question_Turn"],
+            y=df["Total_Duration"],
+            mode="lines+markers",
+            name="總耗時 (Total Time)",
+            line=dict(color="#2563eb", width=3),
+            marker=dict(size=8, color="#2563eb"),
+            customdata=df[["Prompt", "Cumulative_Duration"]],
+            hovertemplate=(
+                "總耗時: <b>%{y}s</b><br>"
+                "累計總耗時: %{customdata[1]}s<br>"
+                "發問預覽: %{customdata[0]}<extra></extra>"
+            )
+        ),
+        secondary_y=False,
+    )
+    
+    # 3. 每次問題的平均回答時間 (折線圖) - 對應左邊 Y 軸
+    fig.add_trace(
+        go.Scatter(
+            x=df["Question_Turn"],
+            y=df["Average_Duration"],
+            mode="lines+markers",
+            name="平均耗時 (Avg Time)",
+            line=dict(color="#f59e0b", width=3, dash='dot'),
+            marker=dict(size=8, color="#f59e0b"),
+            hovertemplate="平均耗時: <b>%{y}s</b><extra></extra>"
+        ),
+        secondary_y=False,
     )
     
     fig.update_layout(
-        title="⏱️ AI Response Cumulative Time (Seconds)",
+        title="⏱️ AI Response Analytics",
         xaxis_title="Question Turn (第幾次問題)",
-        yaxis_title="Cumulative Duration (累計秒數)",
         xaxis=dict(tickmode='linear', tick0=1, dtick=1),
         template="plotly_white",
-        hovermode="x unified",
-        margin=dict(l=40, r=40, t=60, b=40),
+        hovermode="x unified",  # 游標懸停時，會完美將同一 X 軸的資料全部整合在一個浮動視窗中
+        legend=dict(
+            orientation="h", 
+            yanchor="bottom", 
+            y=1.02, 
+            xanchor="right", 
+            x=1
+        ),
+        margin=dict(l=40, r=40, t=80, b=40),
         height=550
     )
+    
+    # 設定左右 Y 軸的標題
+    fig.update_yaxes(title_text="耗時 (Seconds)", secondary_y=False)
+    fig.update_yaxes(title_text="次數 (Count)", secondary_y=True, showgrid=False) # 隱藏右軸格線避免畫面雜亂
     
     return fig
 
@@ -862,7 +902,6 @@ def main():
             else:
                 st.success("Parsed successfully!")
                 
-            # ── 改用原生 st.button 解決完美對齊與框中框問題 ────────────────
             col_b1, col_b2 = st.columns(2)
             
             with col_b1: 
@@ -873,12 +912,11 @@ def main():
                 st.download_button("📥 Export MD", data=st.session_state.parsed_result["md"], file_name=f"{st.session_state.parsed_result['export_name']}_export.md", mime="text/markdown", use_container_width=True)
                 
                 if st.session_state.parsed_result.get("duration_fig"):
-                    # 這裡使用 100% 原生按鈕，完全不會有任何排版差異
+                    # 使用 100% Streamlit 原生按鈕觸發
                     if st.button("📊 Show Chart", use_container_width=True):
                         html_content = st.session_state.parsed_result["duration_fig"].to_html(full_html=True, include_plotlyjs='cdn')
                         b64_html = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
                         
-                        # 隱藏執行開啟新分頁的 JS
                         js = f"""
                         <script>
                             const b64Data = '{b64_html}';

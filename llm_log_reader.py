@@ -584,7 +584,7 @@ def generate_user_prompts_export(messages: list[dict]) -> str:
             
     return out.strip() + "\n"
 
-# ── 繪製時間折線圖與長條圖 (包含雙 Y 軸設計) ─────────────────────────────────
+# ── 更新：修改圖表配色方案，提升專業感與清晰度 ──────────────────────────────
 def render_duration_chart(messages: list[dict]):
     """產生統計圖表：總時間(折線)、平均時間(折線)、回答次數(長條)"""
     chart_data = []
@@ -640,30 +640,30 @@ def render_duration_chart(messages: list[dict]):
         
     df = pd.DataFrame(chart_data)
     
-    # 建立雙 Y 軸的圖表架構
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     
-    # 1. 每次問題的回答次數 (長條圖) - 對應右邊 Y 軸
+    # 1. 每次問題的回答次數 (長條圖) -> 採用更內斂的淺灰色系，作為背景輔助資訊
     fig.add_trace(
         go.Bar(
             x=df["Question_Turn"],
             y=df["AI_Answer_Count"],
             name="回答次數 (Count)",
-            marker_color="rgba(167, 139, 250, 0.4)", # 淺紫色半透明
+            marker_color="rgba(148, 163, 184, 0.25)", # 淺石板灰 (Slate)
+            marker_line=dict(color="rgba(148, 163, 184, 0.6)", width=1),
             hovertemplate="回答次數: <b>%{y} 次</b><extra></extra>"
         ),
         secondary_y=True,
     )
     
-    # 2. 每次問題的總回答時間 (折線圖) - 對應左邊 Y 軸
+    # 2. 每次問題的總回答時間 (折線圖) -> 採用亮藍色，作為主要焦點
     fig.add_trace(
         go.Scatter(
             x=df["Question_Turn"],
             y=df["Total_Duration"],
             mode="lines+markers",
             name="總耗時 (Total Time)",
-            line=dict(color="#2563eb", width=3),
-            marker=dict(size=8, color="#2563eb"),
+            line=dict(color="#3b82f6", width=3), # Blue 500
+            marker=dict(size=8, color="#3b82f6", symbol="circle"),
             customdata=df[["Prompt", "Cumulative_Duration"]],
             hovertemplate=(
                 "總耗時: <b>%{y}s</b><br>"
@@ -674,15 +674,15 @@ def render_duration_chart(messages: list[dict]):
         secondary_y=False,
     )
     
-    # 3. 每次問題的平均回答時間 (折線圖) - 對應左邊 Y 軸
+    # 3. 每次問題的平均回答時間 (折線圖) -> 採用對比的翡翠綠虛線
     fig.add_trace(
         go.Scatter(
             x=df["Question_Turn"],
             y=df["Average_Duration"],
             mode="lines+markers",
             name="平均耗時 (Avg Time)",
-            line=dict(color="#f59e0b", width=3, dash='dot'),
-            marker=dict(size=8, color="#f59e0b"),
+            line=dict(color="#10b981", width=3, dash='dot'), # Emerald 500
+            marker=dict(size=8, color="#10b981", symbol="diamond"),
             hovertemplate="平均耗時: <b>%{y}s</b><extra></extra>"
         ),
         secondary_y=False,
@@ -693,7 +693,7 @@ def render_duration_chart(messages: list[dict]):
         xaxis_title="Question Turn (第幾次問題)",
         xaxis=dict(tickmode='linear', tick0=1, dtick=1),
         template="plotly_white",
-        hovermode="x unified",  # 游標懸停時，會完美將同一 X 軸的資料全部整合在一個浮動視窗中
+        hovermode="x unified",
         legend=dict(
             orientation="h", 
             yanchor="bottom", 
@@ -705,12 +705,10 @@ def render_duration_chart(messages: list[dict]):
         height=550
     )
     
-    # 設定左右 Y 軸的標題
     fig.update_yaxes(title_text="耗時 (Seconds)", secondary_y=False)
-    fig.update_yaxes(title_text="次數 (Count)", secondary_y=True, showgrid=False) # 隱藏右軸格線避免畫面雜亂
+    fig.update_yaxes(title_text="次數 (Count)", secondary_y=True, showgrid=False)
     
     return fig
-
 
 def render_messages_html(messages: list[dict]) -> str:
     if not messages:
@@ -911,32 +909,10 @@ def main():
             with col_b2: 
                 st.download_button("📥 Export MD", data=st.session_state.parsed_result["md"], file_name=f"{st.session_state.parsed_result['export_name']}_export.md", mime="text/markdown", use_container_width=True)
                 
+                # ── 更新：將 JS 觸發移出按鈕區塊，只使用原生的 st.button ────────────────
                 if st.session_state.parsed_result.get("duration_fig"):
-                    # 使用 100% Streamlit 原生按鈕觸發
                     if st.button("📊 Show Chart", use_container_width=True):
-                        html_content = st.session_state.parsed_result["duration_fig"].to_html(full_html=True, include_plotlyjs='cdn')
-                        b64_html = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
-                        
-                        js = f"""
-                        <script>
-                            const b64Data = '{b64_html}';
-                            const binaryStr = window.atob(b64Data);
-                            const bytes = new Uint8Array(binaryStr.length);
-                            for (let i = 0; i < binaryStr.length; i++) {{
-                                bytes[i] = binaryStr.charCodeAt(i);
-                            }}
-                            const decodedHTML = new TextDecoder('utf-8').decode(bytes);
-                            
-                            const newWindow = window.parent.open('', '_blank');
-                            if (newWindow) {{
-                                newWindow.document.write(decodedHTML);
-                                newWindow.document.close();
-                            }} else {{
-                                alert("⚠️ 請允許瀏覽器開啟彈出視窗以查看圖表！\\n(Please allow popups to view the chart.)");
-                            }}
-                        </script>
-                        """
-                        components.html(js, height=0, width=0)
+                        st.session_state.trigger_chart_js = True
                 else:
                     st.button("📊 No Chart Data", disabled=True, use_container_width=True)
             
@@ -959,6 +935,34 @@ def main():
                 components.html(st.session_state.parsed_result["html"], height=650, scrolling=True)
         else: 
             st.info("👈 Please upload conversation logs on the right panel (Click 'Parse' if uploading multiple files).")
+
+# ── 更新：在全域最底端處理 JS 的渲染，避免撐壞佈局 ───────────────────────────
+if st.session_state.get('trigger_chart_js', False):
+    html_content = st.session_state.parsed_result["duration_fig"].to_html(full_html=True, include_plotlyjs='cdn')
+    b64_html = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
+    
+    js = f"""
+    <script>
+        const b64Data = '{b64_html}';
+        const binaryStr = window.atob(b64Data);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {{
+            bytes[i] = binaryStr.charCodeAt(i);
+        }}
+        const decodedHTML = new TextDecoder('utf-8').decode(bytes);
+        
+        const newWindow = window.parent.open('', '_blank');
+        if (newWindow) {{
+            newWindow.document.write(decodedHTML);
+            newWindow.document.close();
+        }} else {{
+            alert("⚠️ 請允許瀏覽器開啟彈出視窗以查看圖表！\\n(Please allow popups to view the chart.)");
+        }}
+    </script>
+    """
+    components.html(js, height=0, width=0)
+    # 重置狀態
+    st.session_state.trigger_chart_js = False
 
 if __name__ == '__main__':
     main()

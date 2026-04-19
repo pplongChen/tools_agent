@@ -584,7 +584,7 @@ def generate_user_prompts_export(messages: list[dict]) -> str:
             
     return out.strip() + "\n"
 
-# ── 更新：修改圖表配色方案，提升專業感與清晰度 ──────────────────────────────
+# ── 圖表邏輯：0點對齊與雙Y軸配置 ──────────────────────────────
 def render_duration_chart(messages: list[dict]):
     """產生統計圖表：總時間(折線)、平均時間(折線)、回答次數(長條)"""
     chart_data = []
@@ -642,27 +642,27 @@ def render_duration_chart(messages: list[dict]):
     
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     
-    # 1. 每次問題的回答次數 (長條圖) -> 採用更內斂的淺灰色系，作為背景輔助資訊
+    # 1. 每次問題的回答次數 (長條圖) -> 對應右側 Y 軸
     fig.add_trace(
         go.Bar(
             x=df["Question_Turn"],
             y=df["AI_Answer_Count"],
             name="回答次數 (Count)",
-            marker_color="rgba(148, 163, 184, 0.25)", # 淺石板灰 (Slate)
+            marker_color="rgba(148, 163, 184, 0.25)",
             marker_line=dict(color="rgba(148, 163, 184, 0.6)", width=1),
             hovertemplate="回答次數: <b>%{y} 次</b><extra></extra>"
         ),
         secondary_y=True,
     )
     
-    # 2. 每次問題的總回答時間 (折線圖) -> 採用亮藍色，作為主要焦點
+    # 2. 每次問題的總回答時間 (折線圖) -> 對應左側 Y 軸
     fig.add_trace(
         go.Scatter(
             x=df["Question_Turn"],
             y=df["Total_Duration"],
             mode="lines+markers",
             name="總耗時 (Total Time)",
-            line=dict(color="#3b82f6", width=3), # Blue 500
+            line=dict(color="#3b82f6", width=3),
             marker=dict(size=8, color="#3b82f6", symbol="circle"),
             customdata=df[["Prompt", "Cumulative_Duration"]],
             hovertemplate=(
@@ -674,18 +674,18 @@ def render_duration_chart(messages: list[dict]):
         secondary_y=False,
     )
     
-    # 3. 每次問題的平均回答時間 (折線圖) -> 採用對比的翡翠綠虛線
+    # 3. 每次問題的平均回答時間 (折線圖) -> 對應右側 Y 軸
     fig.add_trace(
         go.Scatter(
             x=df["Question_Turn"],
             y=df["Average_Duration"],
             mode="lines+markers",
             name="平均耗時 (Avg Time)",
-            line=dict(color="#10b981", width=3, dash='dot'), # Emerald 500
+            line=dict(color="#10b981", width=3, dash='dot'),
             marker=dict(size=8, color="#10b981", symbol="diamond"),
             hovertemplate="平均耗時: <b>%{y}s</b><extra></extra>"
         ),
-        secondary_y=False,
+        secondary_y=True,
     )
     
     fig.update_layout(
@@ -705,8 +705,9 @@ def render_duration_chart(messages: list[dict]):
         height=550
     )
     
-    fig.update_yaxes(title_text="耗時 (Seconds)", secondary_y=False)
-    fig.update_yaxes(title_text="次數 (Count)", secondary_y=True, showgrid=False)
+    # 加入 rangemode="tozero" 來確保左右兩側的 Y 軸都能強制將 0 點對齊在底部
+    fig.update_yaxes(title_text="總耗時 (Total Seconds)", rangemode="tozero", secondary_y=False)
+    fig.update_yaxes(title_text="平均耗時 (s) & 次數 (Count)", rangemode="tozero", secondary_y=True, showgrid=False)
     
     return fig
 
@@ -909,7 +910,7 @@ def main():
             with col_b2: 
                 st.download_button("📥 Export MD", data=st.session_state.parsed_result["md"], file_name=f"{st.session_state.parsed_result['export_name']}_export.md", mime="text/markdown", use_container_width=True)
                 
-                # ── 更新：將 JS 觸發移出按鈕區塊，只使用原生的 st.button ────────────────
+                # ── 100% 完美對齊：不再使用 components.html 生成實體按鈕，改為原生 st.button 觸發
                 if st.session_state.parsed_result.get("duration_fig"):
                     if st.button("📊 Show Chart", use_container_width=True):
                         st.session_state.trigger_chart_js = True
@@ -936,7 +937,7 @@ def main():
         else: 
             st.info("👈 Please upload conversation logs on the right panel (Click 'Parse' if uploading multiple files).")
 
-# ── 更新：在全域最底端處理 JS 的渲染，避免撐壞佈局 ───────────────────────────
+# ── 在全域最底端處理 JS 隱形渲染，保證不影響上方版面排版 ────────────────
 if st.session_state.get('trigger_chart_js', False):
     html_content = st.session_state.parsed_result["duration_fig"].to_html(full_html=True, include_plotlyjs='cdn')
     b64_html = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
@@ -961,7 +962,6 @@ if st.session_state.get('trigger_chart_js', False):
     </script>
     """
     components.html(js, height=0, width=0)
-    # 重置狀態
     st.session_state.trigger_chart_js = False
 
 if __name__ == '__main__':

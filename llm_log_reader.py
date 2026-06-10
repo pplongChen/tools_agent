@@ -923,10 +923,10 @@ def main():
         
         st.markdown("""
             <div style="font-size: 0.9em; line-height: 1.6; color: #555;">
-                <b>👨‍💻 Author:</b> Yen-Hung, Chen<br>
-                <b>🐙 GitHub:</b> https://github.com/pplongChen<br>
-                <b>📁 Repository:</b> https://github.com/pplongChen/tools_agent<br>
-                <b>🌐 Website:</b> https://network-affairs.github.io/
+                <b>👨‍💻 Author:</b> Yen-Hung Chen<br>
+                <b>🐙 GitHub:</b> <a href="https://github.com/pplongChen"> https://github.com/pplongChen </a> <br>
+                <b>📁 Repository:</b> <a href="https://github.com/pplongChen/tools_agent"> https://github.com/pplongChen/tools_agent </a> <br>
+                <b>🌐 Website:</b> <a href="https://network-affairs.github.io/"> https://network-affairs.github.io/ </a>
             </div>
         """, unsafe_allow_html=True)
         

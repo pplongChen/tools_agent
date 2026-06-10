@@ -925,7 +925,7 @@ def main():
             <div style="font-size: 0.9em; line-height: 1.6; color: #555;">
                 <b>👨‍💻 Author:</b> Yen-Hung, Chen<br>
                 <b>🐙 GitHub:</b> https://github.com/pplongChen<br>
-                <b>📁 Repository:</b> https://github.com/pplongChen/agent_tools<br>
+                <b>📁 Repository:</b> https://github.com/pplongChen/tools_agent<br>
                 <b>🌐 Website:</b> https://network-affairs.github.io/
             </div>
         """, unsafe_allow_html=True)
